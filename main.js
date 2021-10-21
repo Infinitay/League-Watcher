@@ -28,8 +28,10 @@ let splits = null;
 	writeAccountsToFile(ACCS);
 
 	for (const acc of ACCS) {
-		if (acc.watchesLeft > 0) {
-			await generateWatches(acc, vods);
+		let attempts = 1;
+		// Lets set a max attempt of 3 just in case
+		while (acc.watchesLeft && attempts < 3) {
+			await generateWatches(acc, vods, attempts++);
 		}
 	}
 
@@ -43,7 +45,7 @@ async function generateAccounts(account_cookies_path, accountArray) {
 	if (fs.existsSync('./accounts.json')) {
 		console.log('accounts.json exists');
 		const accounts = JSON.parse(fs.readFileSync('./accounts.json', 'utf8'));
-		for (const acc of fs.readdirSync(account_cookies_path)) {
+		for (const acc of fs.readdirSync(account_cookies_path).filter(path => path.endsWith(".json"))) {
 			const accName = acc.substring(0, acc.indexOf('.json'));
 			const foundAcc = accounts.find(account => account.username === accName);
 			if (!foundAcc) {
@@ -55,14 +57,14 @@ async function generateAccounts(account_cookies_path, accountArray) {
 					'cookies': JSON.parse(fs.readFileSync(`${account_cookies_path}/${acc}`, 'utf8'))
 				});
 			} else {
-				console.log(`Updating cookies for ${accName}`);
+				console.log(`Updating cookies for ${accName} (${account_cookies_path}/${acc})`);
 				foundAcc.cookies = JSON.parse(fs.readFileSync(`${account_cookies_path}/${acc}`, 'utf8'));
 				accountArray.push(foundAcc);
 			}
 		}
 	} else {
 		console.log('accounts.json doesn\'t exist');
-		for (const acc of fs.readdirSync(account_cookies_path)) {
+		for (const acc of fs.readdirSync(account_cookies_path).filter(path => path.endsWith(".json"))) {
 			const accName = acc.substring(0, acc.indexOf('.json'));
 			console.log(`Creating account for ${accName}`);
 			accountArray.push({
@@ -149,12 +151,13 @@ async function getMission(account) {
 	});
 }
 
-async function generateWatches(account, vodArray) {
+async function generateWatches(account, vodArray, attempt) {
 	let vodsWatched = 0;
 	for (const split of vodArray) {
 		for (const match of split.matches) {
 			for (const game of match.games) {
-				const watchedVods = Array.from(account.watchedVodIDs);
+				// If we are trying again, lets force watch the VOD despite having potentially already watched it
+				const watchedVods = attempt > 1 ? [] : Array.from(account.watchedVodIDs);
 				if (!watchedVods.includes(game.vodId)) {
 					const START_INFO_HEADERS = {
 						...REQUEST_HEADERS
@@ -172,18 +175,18 @@ async function generateWatches(account, vodArray) {
 					// sendWatchRequests(account, START_INFO_HEADERS);
 					for (let i = 0; i < 10; i++) {
 						await axios(`https://rex.rewards.lolesports.com/v1/events/watch`, START_INFO_HEADERS).then(() => {
-							console.debug(`[${account.username}] Watched ${i + 1}x ${START_INFO_HEADERS.data['tournament_id']}/${START_INFO_HEADERS.data['stream_id']}`);
+							console.debug(`[${account.username}] [Attempt #${attempt}] Watched ${i + 1}x ${START_INFO_HEADERS.data['tournament_id']}/${START_INFO_HEADERS.data['stream_id']}`);
 						}).catch(err => {
-							console.debug(`[${account.username}] Error ${err.response.status}: ${err.response.statusText} (${err.response.data})`);
+							console.debug(`[${account.username}] [Attempt #${attempt}] Error ${err.response.status}: ${err.response.statusText} (${err.response.data})`);
 							i--;
 						});
 						await sleep(getRandomIntInclusive(600, 1200));
 					}
-					console.log(`[${account.username}] Successfully watched one vod`);
+					console.log(`[${account.username}] [Attempt #${attempt}] Successfully watched one vod`);
 					watchedVods.push(game.vodId);
 					account.watchedVodIDs = watchedVods;
 					vodsWatched++;
-					console.log(`[${account.username}] Watched ${vodsWatched} vods`);
+					console.log(`[${account.username}] [Attempt #${attempt}] Watched a total of ${vodsWatched} vods`);
 					account.watchesLeft = account.watchesLeft - 1;
 					writeAccountsToFile(ACCS);
 					/* if (account.watchesLeft < 1) {
@@ -207,6 +210,9 @@ async function sendWatchRequests(account, headers) {
 	}
 }
 
+/*
+ * The way the end result is sorted is its by day, and then from top to bottom
+*/
 function sortAndFilterVods(vodArray) {
 	vodArray = vodArray.filter(obj => obj.matches.length != 0);
 	vodArray.forEach(obj => obj.matches = obj.matches.filter(match => match.games.length != 0));
