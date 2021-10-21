@@ -22,8 +22,9 @@ let splits = null;
 		acc.watchesLeft = await getMission(acc);
 	}
 	await generateVods();
-	vods = sortAndFilterVods(vods);
 	writeVodsToFile(vods);
+	vods = sortAndFilterVods(vods);
+	writeSortedVodsToFile(vods);
 	writeAccountsToFile(ACCS);
 
 	for (const acc of ACCS) {
@@ -219,6 +220,11 @@ function writeAccountsToFile(accountArray) {
 function writeVodsToFile(vodArray) {
 	fs.writeFileSync('./vods.json', JSON.stringify(vodArray, null, 4));
 	console.log(`Wrote vods to vods.json`);
+}
+
+function writeSortedVodsToFile(vodArray) {
+	fs.writeFileSync('./vods-sorted.json', JSON.stringify(vodArray, null, 4));
+	console.log(`Wrote sorted vods to vods-sorted.json`);
 }
 
 function formatCookies(cookies) {
