@@ -136,11 +136,12 @@ async function getMission(account) {
 	MISSION_HEADER['withCredentials'] = true;
 	MISSION_HEADER.headers['cookie'] = formatCookies(account.cookies);
 
-	return axios('https://raptor.rewards.lolesports.com/v1/missions?locale=en_US', MISSION_HEADER).then(resp => {
-		const watchAndEarnMission = resp.data['activeMissions'].find(mission => mission.missionInfo.title['en_US'].startsWith('Watching Worlds'));
+	return axios('https://raptor.rewards.lolesports.com/v1/missions/free?locale=en_US', MISSION_HEADER).then(resp => {
+		const watchAndEarnMission = resp.data['active'].filter(mission => mission.title['en_US'].startsWith('Watch'));
 		if (watchAndEarnMission) {
-			console.log(`Watches left for ${account.username}: ${watchAndEarnMission.remainingSteps}`);
-			return watchAndEarnMission.remainingSteps;
+			const numberOfWatchesReq = watchAndEarnMission.map(mission => mission.remainingSteps).reduce((prev, curr) => prev + curr);
+			console.log(`Watches left for ${account.username}: ${numberOfWatchesReq}`);
+			return numberOfWatchesReq;
 		} else {
 			console.log(`Watches left for ${account.username}: 0`);
 			return 0;
