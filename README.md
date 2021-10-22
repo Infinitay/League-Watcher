@@ -4,15 +4,17 @@ _Watches_ League of Legends VODs on their [lolesports](https://lolesports.com/vo
 
 Please don't abuse this tool. Only use it if you have multiple accounts and have already watched the latest VODs at least once.
 
-# Installation
+## Installation
 
 1. Make sure you have a compatible version of node.js. I have tested and used this tool using node v16.1.0.
 
-2. Install the required packages via `npm i`.
+2. Either [download](https://github.com/Infinitay/League-Watcher/archive/refs/heads/master.zip) or clone the repo
 
-3. Supply the required account cookies within the `account-cookies` directory. If the folder does not exist, please create one.
+3. Install the required packages via `npm i`.
 
-# Setting up cookies
+4. Supply the required account cookies within the `account-cookies` directory. If the folder does not exist, please create one.
+
+## Setting up cookies
 
 Preferably use the Chrome extension [EditThisCookie](https://chrome.google.com/webstore/detail/editthiscookie/fngmhnnpilhplaeedifhccceomclgfbg).
 
@@ -22,7 +24,15 @@ Preferably use the Chrome extension [EditThisCookie](https://chrome.google.com/w
 3. Create a new `.json` file named with your account name to keep things organized.
 4. Paste the cookies you copied from step 2 into the respective file from step 3.
 
-# Additional Information
+## Usage
+After setting everything up, you can run the program by running `node main.js`. If it is your first time running, let the VOD generation complete. If you wish to run the program in the future and don't need to update or re-build the VODs, you can do `node main.js -SV`.
+
+## Arguments
+| Arg | Value | Description |
+| --- | ----- | ----------- |
+| -SV, --skip-vods | N/A | Skips the VOD generation |
+
+## Additional Information
 
 This was worked on about one to two years ago, so the code is not refactored. With that being said, there may be some bugs. Currently, sometimes League will not recognize a VOD as watched despite the program _watching_ the VOD. I'm not sure if that is because of some rate limit on League's end, or if it is because we did not watch enough of the VOD. Currently, there is hardcoded random watch length between 20 and 26 minutes because there is not an end time exposed for the match in League's VOD endpoint. I don't want to bother dealing with YouTube's API and involve another set of API keys for something that does not need to be this complicated. There are enough VODs to go around to complete the missions anyways.
 
@@ -32,7 +42,7 @@ If you are curious about the watch order, currently the order is the latest even
 
 ![](https://i.imgur.com/uvTcPBD.png)
 
-# No Current Plans To
+## No Current Plans To
 
 - Refactor
 - Add support for specific events
