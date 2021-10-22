@@ -70,7 +70,6 @@ let splits = null;
 		return {...split, matches: split.matches.filter(match => match.blockName == "Finals")};
 	}); */
 	const latestSplitFinalsVODs = { ...latestSplitVODs[0], matches: latestSplitVODs[0].matches.filter(match => match.blockName == "Finals") };
-
 	for (const acc of ACCS) {
 		let attempts = 1;
 		let vodsToWatch;
@@ -260,6 +259,7 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 						return;
 					} else if ((account.watchesLeft > 0 && !hasFinalsMatchesVODs)) {
 						console.log(`[${account.username}] [Attempt #${attempt}] We have ${account.watchesLeft} watches left, but no Finals matches to watch.`);
+						return;
 					}
 				}
 			}
