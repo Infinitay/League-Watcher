@@ -1,20 +1,19 @@
 {
-  "name": "league-watcher",
-  "version": "1.0.0",
-  "description": "",
-  "main": "main.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "axios": "^0.23.0",
-    "commander": "^8.2.0",
-    "fs": "0.0.1-security"
-  },
-  "devDependencies": {
-    "eslint": "^8.0.1"
-  }
+	"name": "league-watcher",
+	"version": "1.0.0",
+	"description": "",
+	"main": "main.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"axios": "^0.23.0",
+		"commander": "^8.2.0"
+	},
+	"devDependencies": {
+		"eslint": "^8.0.1"
+	}
 }
