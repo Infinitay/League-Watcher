@@ -252,12 +252,13 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 					console.log(`[${account.username}] [Attempt #${attempt}] Watched a total of ${vodsWatched} vods`);
 					// Lets sleep before we pull in case there is some delay
 					await sleep(3000);
-					account.watchesLeft = getMission(account);
+					account.watchesLeft = await getMission(account);
 					writeAccountsToFile(ACCS);
+					// console.log(`account.watchesLeft: ${account.watchesLeft}, hasFinalsMatchesVODs ${hasFinalsMatchesVODs} | if1: ${account.watchesLeft < 1}, if2: ${account.watchesLeft == 1} && ${!hasFinalsMatchesVODs}`);
 					if (account.watchesLeft < 1) {
 						console.log(`[${account.username}] [Attempt #${attempt}] No more watches required.`);
 						return;
-					} else if ((account.watchesLeft > 0 && !hasFinalsMatchesVODs)) {
+					} else if ((account.watchesLeft == 1 && !hasFinalsMatchesVODs)) {
 						console.log(`[${account.username}] [Attempt #${attempt}] We have ${account.watchesLeft} watches left, but no Finals matches to watch.`);
 						return;
 					}
