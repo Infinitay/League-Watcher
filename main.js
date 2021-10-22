@@ -1,46 +1,110 @@
 const axios = require('axios').default;
 const fs = require('fs');
+const { program } = require('commander');
 
 const ACCOUNT_COOKIES_PATH = './account-cookies';
 const REQUEST_HEADERS = {
 	'headers': {
 		'origin': 'https://watch.lolesports.com',
 		'connection': 'keep-alive',
-		'x-api-key': '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z',
 		'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
 	}
 };
+
+/*
+ * TODO
+ * Provide a split slug argument for users to specify which split they want to watch VODs for
+ */
+program.option("-SV", "--skip-vods", "Skips fetching and saving list of vods and vods-sorted", false);
+program.parse(process.argv);
+const args = program.opts();
+
 const ACCS = [];
 let vods = [];
 let leagues = null;
 let splits = null;
 
 (async () => {
+	if (args.SV) {
+		console.log("User chose to skip VOD generation.");
+		if (fs.existsSync('./vods-sorted.json')) {
+			vods = JSON.parse(fs.readFileSync('./vods-sorted.json', 'utf8'));
+		} else if (fs.existsSync('./vods.json')) {
+			console.log(`Found vods.json but no vods-sorted.json. Please re-run the app without skipping VOD generation.`);
+			process.exit(1);
+		} else {
+			console.log(`Please re-run the app without skipping VOD generation.`);
+			process.exit(1);
+		}
+	} else {
+		console.log("Generating VODs...");
+		await generateVods();
+		writeVodsToFile(vods);
+		vods = sortAndFilterVods(vods);
+		writeSortedVodsToFile(vods);
+	}
 
 	await generateAccounts(ACCOUNT_COOKIES_PATH, ACCS);
 	for (const acc of ACCS) {
 		acc.watchesLeft = await getMission(acc);
 	}
-	await generateVods();
-	writeVodsToFile(vods);
-	vods = sortAndFilterVods(vods);
-	writeSortedVodsToFile(vods);
 	writeAccountsToFile(ACCS);
+
+	const latestSplitVODs = vods.filter(split => split.split.slug == "worlds_2021");
+
+	/*
+	 * Currently the way we handle getting the number of missions left is ANY watch missions
+	 * League also gives a separate mission for watching a Finals match
+	 * So what if we run the program on a date BEFORE a Finals match even takes place?
+	 * We would constantly loop over all vods until we exceed 3 attempts and then move on to the next account
+	 * 
+	 * So the way we can mitigate this is if we make sure to watch vods if there is more than one watch left
+	 * AND if there is NOFinals match in our VODs, otherwise skip to the next account
+	 * The only downside of doing it this way is the extra O(n) run to see if there is a Finals match
+	 * 
+	 * NOTE, IN worlds_2021 slug THE MISSION IS CALLED "Watching Worlds Finals"
+	 * IN worlds_2020 slug THERE WAS ONLY A blockName "Knockouts" for the final match, and not Finals
+	 * But in lcs_2021 there is a blockName "Finals"
+	*/
+	/* const latestSplitFinalsVODs = latestSplitVODs.map(split => {
+		return {...split, matches: split.matches.filter(match => match.blockName == "Finals")};
+	}); */
+	const latestSplitFinalsVODs = { ...latestSplitVODs[0], matches: latestSplitVODs[0].matches.filter(match => match.blockName == "Finals") };
 
 	for (const acc of ACCS) {
 		let attempts = 1;
+		let vodsToWatch;
+		let vodsToWatchName;
+		// Check to see if we have to watch any match
+		if (acc.watchesLeft > 1 && latestSplitFinalsVODs.matches.length == 0) {
+			vodsToWatch = latestSplitVODs;
+			vodsToWatchName = "any VODs";
+		} else if (acc.watchesLeft > 0 && latestSplitFinalsVODs.matches.length > 0) {
+			vodsToWatch = [latestSplitFinalsVODs];
+			vodsToWatchName = "Finals VODs";
+		} else {
+			console.log(`Skipping ${acc.username} because we have nothing to watch, or are waiting for finals match.`);
+			continue;
+		}
+
 		// Lets set a max attempt of 3 just in case
 		while (acc.watchesLeft && attempts < 3) {
-			await generateWatches(acc, vods, attempts++);
+			console.log(`Generating watches for ${acc.username} with attempt #${attempts} with VOD type of ${vodsToWatchName}.`);
+			await generateWatches(acc, vodsToWatch, attempts++, latestSplitFinalsVODs.matches.length > 0);
 		}
 	}
 
-	for (const acc of ACCS) {
+	/* for (const acc of ACCS) {
 		acc.watchesLeft = await getMission(acc);
 	}
-	writeAccountsToFile(ACCS);
+	writeAccountsToFile(ACCS); */
 })();
 
+/*
+ * TODO
+ * Modify watched VODs to save the slug of the split
+ * That way we can make keep track of old split watched vods, and still have an idea of what we have to watch next time
+ */
 async function generateAccounts(account_cookies_path, accountArray) {
 	if (fs.existsSync('./accounts.json')) {
 		console.log('accounts.json exists');
@@ -151,7 +215,7 @@ async function getMission(account) {
 	});
 }
 
-async function generateWatches(account, vodArray, attempt) {
+async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs) {
 	let vodsWatched = 0;
 	for (const split of vodArray) {
 		for (const match of split.matches) {
@@ -187,11 +251,16 @@ async function generateWatches(account, vodArray, attempt) {
 					account.watchedVodIDs = watchedVods;
 					vodsWatched++;
 					console.log(`[${account.username}] [Attempt #${attempt}] Watched a total of ${vodsWatched} vods`);
-					account.watchesLeft = account.watchesLeft - 1;
+					// Lets sleep before we pull in case there is some delay
+					await sleep(3000);
+					account.watchesLeft = getMission(account);
 					writeAccountsToFile(ACCS);
-					/* if (account.watchesLeft < 1) {
+					if (account.watchesLeft < 1) {
+						console.log(`[${account.username}] [Attempt #${attempt}] No more watches required.`);
 						return;
-					} */
+					} else if ((account.watchesLeft > 0 && !hasFinalsMatchesVODs)) {
+						console.log(`[${account.username}] [Attempt #${attempt}] We have ${account.watchesLeft} watches left, but no Finals matches to watch.`);
+					}
 				}
 			}
 		}
