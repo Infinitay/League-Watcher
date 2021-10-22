@@ -212,7 +212,7 @@ async function getMission(account) {
 			console.log(`Watches left for ${account.username}: 0`);
 			return 0;
 		}
-	});
+	}).catch(err => console.log(err));
 }
 
 async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs) {
