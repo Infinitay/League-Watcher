@@ -25,12 +25,13 @@ Preferably use the Chrome extension [EditThisCookie](https://chrome.google.com/w
 4. Paste the cookies you copied from step 2 into the respective file from step 3.
 
 ## Usage
-After setting everything up, you can run the program by running `node main.js`. If it is your first time running, let the VOD generation complete. If you wish to run the program in the future and don't need to update or re-build the VODs, you can do `node main.js -SV`.
+After setting everything up, you can run the program by running `npm start` or `node main.js`. If it is your first time running, let the VOD generation complete. If you wish to run the program in the future and don't need to update or re-build the VODs, you can do `node main.js -SV`.
 
 ## Arguments
 | Arg | Value | Description |
 | --- | ----- | ----------- |
 | -SV, --skip-vods | N/A | Skips the VOD generation |
+| -FM, --force-mission | N/A | Forces watching VODs until there are no missions left |
 
 ## Additional Information
 

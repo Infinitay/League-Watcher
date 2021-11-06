@@ -8,6 +8,7 @@ const REQUEST_HEADERS = {
 		'origin': 'https://watch.lolesports.com',
 		'connection': 'keep-alive',
 		'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
+		'x-api-key': '0TvQnueqKa5mxJntVWt0w4LpLfEkrV1Ta8rQBb9Z'
 	}
 };
 
@@ -16,6 +17,7 @@ const REQUEST_HEADERS = {
  * Provide a split slug argument for users to specify which split they want to watch VODs for
  */
 program.option("-SV", "--skip-vods", "Skips fetching and saving list of vods and vods-sorted", false);
+program.option("-FM", "--force-mission", "Forces watching vods until there are no watch missions left", false);
 program.parse(process.argv);
 const args = program.opts();
 
@@ -25,7 +27,7 @@ let leagues = null;
 let splits = null;
 
 (async () => {
-	if (args.SV) {
+	if (args["SV"]) {
 		console.log("User chose to skip VOD generation.");
 		if (fs.existsSync('./vods-sorted.json')) {
 			vods = JSON.parse(fs.readFileSync('./vods-sorted.json', 'utf8'));
@@ -75,7 +77,7 @@ let splits = null;
 		let vodsToWatch;
 		let vodsToWatchName;
 		// Check to see if we have to watch any match
-		if (acc.watchesLeft > 1 && latestSplitFinalsVODs.matches.length == 0) {
+		if (args["FM"] || acc.watchesLeft > 1 && latestSplitFinalsVODs.matches.length == 0) {
 			vodsToWatch = latestSplitVODs;
 			vodsToWatchName = "any VODs";
 		} else if (acc.watchesLeft > 0 && latestSplitFinalsVODs.matches.length > 0) {
@@ -87,7 +89,7 @@ let splits = null;
 		}
 
 		// Lets set a max attempt of 3 just in case
-		while (acc.watchesLeft && attempts < 3) {
+		while (acc.watchesLeft && attempts <= 3) {
 			console.log(`Generating watches for ${acc.username} with attempt #${attempts} with VOD type of ${vodsToWatchName}.`);
 			await generateWatches(acc, vodsToWatch, attempts++, latestSplitFinalsVODs.matches.length > 0);
 		}
@@ -188,6 +190,9 @@ async function generateVods() {
 			}
 		}
 	}).catch(err => {
+		if (err.response.status == 403) {
+			console.error("Error 403, Failed to fetch leagues. Potentially outdated API key.");
+		}
 		console.log(err);
 	}).finally(() => {
 		console.log(`Number of splits gathered: ${vods.length}`);
@@ -225,6 +230,8 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 					const START_INFO_HEADERS = {
 						...REQUEST_HEADERS
 					};
+					delete START_INFO_HEADERS['headers']['x-api-key']
+					START_INFO_HEADERS['headers']['origin'] = `https://lolesports.com`
 					START_INFO_HEADERS['withCredentials'] = true;
 					START_INFO_HEADERS.headers['cookie'] = formatCookies(account.cookies);
 					START_INFO_HEADERS.method = "POST";
@@ -238,14 +245,14 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 					// sendWatchRequests(account, START_INFO_HEADERS);
 					for (let i = 0; i < 10; i++) {
 						await axios(`https://rex.rewards.lolesports.com/v1/events/watch`, START_INFO_HEADERS).then(() => {
-							console.debug(`[${account.username}] [Attempt #${attempt}] Watched ${i + 1}x ${START_INFO_HEADERS.data['tournament_id']}/${START_INFO_HEADERS.data['stream_id']}`);
+							console.debug(`[${account.username}] [Attempt #${attempt}] Sending heartbeat #${i + 1} for ${split['split'].slug} VOD - ${split['split'].id}/${match.matchID}/${game.vodId} (Game #${game.gameNumber + 1})`);
 						}).catch(err => {
 							console.debug(`[${account.username}] [Attempt #${attempt}] Error ${err.response.status}: ${err.response.statusText} (${err.response.data})`);
 							i--;
 						});
 						await sleep(getRandomIntInclusive(600, 1200));
 					}
-					console.log(`[${account.username}] [Attempt #${attempt}] Successfully watched one vod`);
+					console.log(`[${account.username}] [Attempt #${attempt}] Successfully watched a ${split['split'].slug} VOD - ${split['split'].id}/${match.matchID}/${game.vodId} (Game #${game.gameNumber + 1})`);
 					watchedVods.push(game.vodId);
 					account.watchedVodIDs = watchedVods;
 					vodsWatched++;
@@ -258,7 +265,7 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 					if (account.watchesLeft < 1) {
 						console.log(`[${account.username}] [Attempt #${attempt}] No more watches required.`);
 						return;
-					} else if ((account.watchesLeft == 1 && !hasFinalsMatchesVODs)) {
+					} else if (!args["FM"] && (account.watchesLeft == 1 && !hasFinalsMatchesVODs)) {
 						console.log(`[${account.username}] [Attempt #${attempt}] We have ${account.watchesLeft} watches left, but no Finals matches to watch.`);
 						return;
 					}
