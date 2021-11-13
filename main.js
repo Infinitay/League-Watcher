@@ -208,7 +208,7 @@ async function getMission(account) {
 
 	return axios('https://raptor.rewards.lolesports.com/v1/missions/free?locale=en_US', MISSION_HEADER).then(resp => {
 		const watchAndEarnMission = resp.data['active'].filter(mission => mission.title['en_US'].startsWith('Watch'));
-		if (watchAndEarnMission) {
+		if (watchAndEarnMission.length) {
 			const numberOfWatchesReq = watchAndEarnMission.map(mission => mission.remainingSteps).reduce((prev, curr) => prev + curr);
 			console.log(`Watches left for ${account.username}: ${numberOfWatchesReq}`);
 			return numberOfWatchesReq;
