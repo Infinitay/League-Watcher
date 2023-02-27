@@ -12,23 +12,32 @@ const REQUEST_HEADERS = {
 	}
 };
 
-/*
- * TODO
- * Provide a split slug argument for users to specify which split they want to watch VODs for
- */
-program.option("-SV", "--skip-vods", "Skips fetching and saving list of vods and vods-sorted", false);
-program.option("-FM", "--force-mission", "Forces watching vods until there are no watch missions left", false);
-program.parse(process.argv);
-const args = program.opts();
-
 const ACCS = [];
 let vods = [];
 let leagues = null;
 let splits = null;
+let events = null;
 
-(async () => {
+/*
+ * TODO
+ * Provide a split slug argument for users to specify which split they want to watch VODs for
+*/
+program.option("-SV", "--skip-vods", "Skips fetching and saving list of vods and vods-sorted", false);
+program.option("-FC", "--force-mission-completion", "Forces watching vods until there are no watch missions left", false);
+program.option("-M", "--mission", "Watches vods until there are no watch missions left", false).action(actionMission);
+program.option("-L", "--live-watch", "Watches live matches instead of VODs", false).action(actionLiveWatch);
+program.parse(process.argv);
+const args = program.opts();
+
+if (Object.keys(args).length == 0) {
+	console.log("No arguments provided. Please provide an argument.");
+	process.exit(1);
+}
+
+async function actionMission() {
+	console.log("Running League Watcher in mission mode...");
 	if (args["SV"]) {
-		console.log("User chose to skip VOD generation.");
+		console.log("Skipping VOD generation.");
 		if (fs.existsSync('./vods-sorted.json')) {
 			vods = JSON.parse(fs.readFileSync('./vods-sorted.json', 'utf8'));
 		} else if (fs.existsSync('./vods.json')) {
@@ -77,7 +86,7 @@ let splits = null;
 		let vodsToWatch;
 		let vodsToWatchName;
 		// Check to see if we have to watch any match
-		if (args["FM"] || acc.watchesLeft > 1 && latestSplitFinalsVODs.matches.length == 0) {
+		if (args["FC"] || acc.watchesLeft > 1 && latestSplitFinalsVODs.matches.length == 0) {
 			vodsToWatch = latestSplitVODs;
 			vodsToWatchName = "any VODs";
 		} else if (acc.watchesLeft > 0 && latestSplitFinalsVODs.matches.length > 0) {
@@ -99,7 +108,39 @@ let splits = null;
 		acc.watchesLeft = await getMission(acc);
 	}
 	writeAccountsToFile(ACCS); */
-})();
+}
+
+async function actionLiveWatch() {
+	console.log("Running League Watcher in live watch mode...");
+
+	(async () => {
+		while (true) {
+			console.log(`Fetching live events...`)
+			events = await fetchLiveEvents();
+			await sleep(getRandomIntInclusive(45000, 55000));
+		}
+	})();
+
+	(async () => {
+		await generateAccounts(ACCOUNT_COOKIES_PATH, ACCS);
+		while (true) {
+			for (const acc of ACCS) {
+				if (events) {
+					for (const event of events) {
+						const versusString = event.match?.teams.map(team => team.name).join(' vs ') || "Unknown";
+						console.log(`[${acc.username}][${event.league.name}] Watching ${versusString}`);
+						await generateLiveWatch(acc, event);
+						await sleep(getRandomIntInclusive(500, 2500));
+					}
+				} else {
+					console.log(`[${acc.username}] No live events found`);
+				}
+			}
+			writeAccountsToFile(ACCS);
+			await sleep(getRandomIntInclusive(60000, 70000));
+		}
+	})();
+}
 
 /*
  * TODO
@@ -265,7 +306,7 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 					if (account.watchesLeft < 1) {
 						console.log(`[${account.username}] [Attempt #${attempt}] No more watches required.`);
 						return;
-					} else if (!args["FM"] && (account.watchesLeft == 1 && !hasFinalsMatchesVODs)) {
+					} else if (!args["FC"] && (account.watchesLeft == 1 && !hasFinalsMatchesVODs)) {
 						console.log(`[${account.username}] [Attempt #${attempt}] We have ${account.watchesLeft} watches left, but no Finals matches to watch.`);
 						return;
 					}
@@ -273,6 +314,48 @@ async function generateWatches(account, vodArray, attempt, hasFinalsMatchesVODs)
 			}
 		}
 	}
+}
+
+async function fetchLiveEvents() {
+	return await axios('https://esports-api.lolesports.com/persisted/gw/getLive?hl=en-US', REQUEST_HEADERS).then(async resp => {
+		console.log(`Number of live events gathered: ${resp.data['data']['schedule']['events'].length}`);
+		return resp.data['data']['schedule']['events'];
+	}).catch(err => {
+		if (err.response.status == 403) {
+			console.error("Error 403, Failed to fetch live events. Potentially outdated API key.");
+		}
+		console.log(err);
+	});
+}
+
+async function generateLiveWatch(account, event) {
+	const START_INFO_HEADERS = JSON.parse(JSON.stringify(REQUEST_HEADERS)); // We have to do this because JS still copies the reference to the cloned object
+	delete START_INFO_HEADERS['headers']['x-api-key']
+	START_INFO_HEADERS['headers']['origin'] = `https://lolesports.com`
+	START_INFO_HEADERS['withCredentials'] = true;
+	START_INFO_HEADERS.headers['cookie'] = formatCookies(account.cookies);
+	START_INFO_HEADERS.method = "POST";
+	START_INFO_HEADERS.data = {
+		"geolocation": { "code": "US", "area": "NA" }, // user's geolocation
+		"source": event['streams'][0]['provider'], // source of the stream
+		"stream_id": event['streams'][0]['parameter'], // id of the stream
+		"stream_position_time": new Date(), // time of the stream, or current time since it's live
+		"tournament_id": event['tournament']['id'] // id of the tournament
+	};
+
+	// sendWatchRequests(account, START_INFO_HEADERS);
+	// while (true) {
+	console.debug(`[${account.username}] Sending heartbeat`);
+	return await axios(`https://rex.rewards.lolesports.com/v1/events/watch`, START_INFO_HEADERS).then((resp) => {
+		console.log(JSON.stringify(resp.data)); // console.log(JSON.stringify(resp.data, null, 4));
+		return true;
+	}).catch(err => {
+		// console.debug(`[${account.username}] Error ${err.response.status}: ${err.response.statusText} (${err.response.data})`);
+		console.debug(`[${account.username}] Error`);
+		console.log(err);
+		return false;
+	});
+	// }
 }
 
 async function sendWatchRequests(account, headers) {
